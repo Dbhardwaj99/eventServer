@@ -79,7 +79,9 @@ async def index():
             items_html.append(card)
 
     body = "\n".join(items_html) if items_html else (
-        "<div class=\"text-slate-500 text-center\">No requests received yet. Send a POST request to any endpoint.</div>"
+        '<div style="text-align: center; padding: 4rem; font-family: sans-serif; color: #64748b;">'
+        'No requests received yet. Send a POST request to any endpoint.'
+        '</div>'
     )
 
     html_page = f"""
@@ -143,8 +145,6 @@ async def catch_all(request: Request, full_path: str):
         },
     })
 
-
 if __name__ == "__main__":
-    # Run the server with uvicorn when executed directly
-    uvicorn.run("main:app", host="0.0.0.0", port=15402, reload=False)
-
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
