@@ -203,18 +203,23 @@
     }
 
     function appendNewEvents(events) {
-      let appended = 0;
+      const q = currentFilter.trim().toLowerCase();
+      const newOnes = [];
       for (const ev of events) {
         const id = eventId(ev);
         if (seen.has(id)) continue;
         seen.add(id);
         if (ev._seq == null) ev._seq = seq++;
         allEvents.push(ev);
-        appended++;
+        // if it matches current filter (or no filter), queue for prepend
+        if (!q || (ev.eventName || '').toLowerCase().includes(q)) newOnes.push(ev);
       }
-      if (appended > 0) {
-        renderList();
-        statusEl.textContent = `Added ${appended} new event(s) • ${new Date().toLocaleTimeString()}`;
+      if (newOnes.length > 0) {
+        newOnes.sort((a,b)=> eventSortKey(b)-eventSortKey(a));
+        for (const ev of newOnes) {
+          container.prepend(buildEventCard(ev, true));
+        }
+        statusEl.textContent = `Added ${newOnes.length} new event(s) • ${new Date().toLocaleTimeString()}`;
       } else {
         statusEl.textContent = `No new events • ${new Date().toLocaleTimeString()}`;
       }

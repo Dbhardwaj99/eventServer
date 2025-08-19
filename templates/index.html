@@ -50,6 +50,8 @@
       .j-bool { color: var(--bool); }
       .j-null { color: var(--null); }
       .empty { text-align: center; color: var(--muted); padding: 48px 0; }
+      @keyframes flashNew { from { box-shadow: 0 0 0 9999px rgba(34,197,94,0.12) inset; } to { box-shadow: 0 0 0 9999px rgba(34,197,94,0) inset; } }
+      .flash-new { animation: flashNew 1200ms ease-out 1; }
     </style>
     <script>
       function applyTheme() {
@@ -81,23 +83,105 @@
     {% include "_navbar.html" %}
     <header style="display:none"></header>
 
-    <main>
-      {% if items and items|length > 0 %}
-        {% for item in items %}
-          <section class="card">
-            <div class="row2">
-              <div class="title">{{ item.endpoint }}</div>
-              <div class="badges">
-                <span class="badge">{{ item.timestamp }} IST</span>
-                <span class="badge">{{ item.method }}</span>
-              </div>
-            </div>
-            <pre data-json><code>{{ item.json_pretty }}</code></pre>
-          </section>
-        {% endfor %}
-      {% else %}
-        <div class="empty">No requests yet. Send a POST request to any endpoint.</div>
-      {% endif %}
-    </main>
+    <section style="padding:12px 16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div id="status" class="status">Idle</div>
+      <label for="interval">Refresh</label>
+      <select id="interval">
+        <option value="1000" selected>1s</option>
+        <option value="2000">2s</option>
+        <option value="5000">5s</option>
+        <option value="10000">10s</option>
+        <option value="0">Pause</option>
+      </select>
+      <form method="post" action="/clear" onsubmit="return confirm('Clear all logs?');">
+        <button type="submit" class="btn">Clear</button>
+      </form>
+    </section>
+
+    <main id="logs"></main>
+
+    <script>
+      const statusEl = document.getElementById('status');
+      const intervalSel = document.getElementById('interval');
+      const container = document.getElementById('logs');
+      const seen = new Set();
+      const allLogs = [];
+      let seq = 0;
+
+      function logId(item) {
+        return [item.timestamp||'', item.endpoint||'', item.method||''].join('::') + '::' + JSON.stringify(item.json||'');
+      }
+      function syntaxHighlight(txt) {
+        const esc = txt.replace(/\&/g,'&amp;').replace(/</g,'&lt;');
+        return esc.replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g, m => {
+          let cls = 'j-number';
+          if (/^"/.test(m)) cls = /:$/.test(m) ? 'j-key' : 'j-string';
+          else if (/true|false/.test(m)) cls = 'j-bool';
+          else if (/null/.test(m)) cls = 'j-null';
+          return '<span class="'+cls+'">'+m+'</span>';
+        });
+      }
+      function buildLogCard(item, isNew=false) {
+        const sec = document.createElement('section');
+        sec.className = 'card'+(isNew?' flash-new':'');
+        const head = document.createElement('div'); head.className = 'row2';
+        const title = document.createElement('div'); title.className = 'title'; title.textContent = item.endpoint || '';
+        const badges = document.createElement('div'); badges.className='badges';
+        const b1 = document.createElement('span'); b1.className='badge'; b1.textContent = (item.timestamp||'') + ' IST'; badges.appendChild(b1);
+        const b2 = document.createElement('span'); b2.className='badge'; b2.textContent = item.method||''; badges.appendChild(b2);
+        head.appendChild(title); head.appendChild(badges);
+        const pre = document.createElement('pre'); const code = document.createElement('code');
+        code.innerHTML = syntaxHighlight(JSON.stringify(item.json ?? null, null, 2)); pre.appendChild(code);
+        sec.appendChild(head); sec.appendChild(pre);
+        return sec;
+      }
+      function sortKey(item) { return item._seq ?? 0; }
+      function renderAll() {
+        container.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        const base = allLogs.slice().sort((a,b)=> sortKey(b)-sortKey(a));
+        for (const it of base) frag.appendChild(buildLogCard(it));
+        container.appendChild(frag);
+      }
+      async function fetchAndUpdate(){
+        try {
+          statusEl.textContent = 'Fetching...';
+          const res = await fetch('/logs-feed', { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP '+res.status);
+          const data = await res.json();
+          const items = Array.isArray(data.items) ? data.items : [];
+          let added = 0;
+          const newOnes = [];
+          for (const it of items) {
+            const id = logId(it);
+            if (seen.has(id)) continue;
+            seen.add(id);
+            it._seq = seq++;
+            allLogs.push(it);
+            newOnes.push(it);
+            added++;
+          }
+          if (added>0) {
+            // Prepend only new ones (newest first)
+            newOnes.sort((a,b)=> sortKey(b)-sortKey(a));
+            for (const it of newOnes) {
+              container.prepend(buildLogCard(it, true));
+            }
+          }
+          if (container.children.length === 0 && allLogs.length === 0) {
+            container.innerHTML = '<div class="empty">No requests yet. Send a POST request to any endpoint.</div>';
+          }
+          statusEl.textContent = added>0 ? `Added ${added} • ${new Date().toLocaleTimeString()}` : `No new • ${new Date().toLocaleTimeString()}`;
+        } catch (e) {
+          statusEl.textContent = 'Error: '+String(e);
+          console.error(e);
+        }
+      }
+      let timer=null;
+      function startPolling(ms){ stopPolling(); if(ms===0){ statusEl.textContent='Paused'; return;} fetchAndUpdate(); timer=setInterval(fetchAndUpdate, ms); }
+      function stopPolling(){ if(timer) clearInterval(timer); timer=null; }
+      intervalSel.addEventListener('change', ()=> startPolling(Number(intervalSel.value)));
+      startPolling(Number(intervalSel.value));
+    </script>
   </body>
 </html>
