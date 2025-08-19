@@ -78,23 +78,8 @@
     </script>
   </head>
   <body>
-    <header>
-      <div class="row">
-        <div class="left">
-          <div class="title">Event Server</div>
-          <div class="status">Captured requests</div>
-        </div>
-        <div class="controls">
-          <div class="nav">
-            <a class="btn" href="/events-view">Live Events</a>
-            <button id="themeToggle" class="btn" onclick="localStorage.setItem('theme', (localStorage.getItem('theme')||'dark')==='light'?'dark':'light'); applyTheme();">Light Mode</button>
-          </div>
-          <form method="post" action="/clear" onsubmit="return confirm('Clear all logs?');">
-            <button type="submit" class="btn">Clear</button>
-          </form>
-        </div>
-      </div>
-    </header>
+    {% include "_navbar.html" %}
+    <header style="display:none"></header>
 
     <main>
       {% if items and items|length > 0 %}

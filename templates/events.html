@@ -61,31 +61,20 @@
   </style>
 </head>
 <body>
-  <header>
-    <div class="row">
-      <div class="left">
-        <div class="event-title">Live Events</div>
-        <div id="status" class="status">Idle</div>
-      </div>
-      <div class="controls">
-        <div class="nav">
-          <a class="btn" href="/">View Logs</a>
-          <button id="themeToggle" class="btn">Toggle Theme</button>
-        </div>
-        <label for="interval">Refresh</label>
-        <select id="interval">
-          <option value="1000" selected>1s</option>
-          <option value="2000">2s</option>
-          <option value="5000">5s</option>
-          <option value="10000">10s</option>
-          <option value="0">Pause</option>
-        </select>
-        <label for="filterName">Filter</label>
-        <input id="filterName" type="text" placeholder="eventName contains..." />
-        <button id="clear" class="btn">Clear</button>
-      </div>
-    </div>
-  </header>
+  {% include "_navbar.html" %}
+  <header style="display:none"></header>
+  <section style="padding:12px 16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <div id="status" class="status">Idle</div>
+    <label for="interval">Refresh</label>
+    <select id="interval">
+      <option value="1000" selected>1s</option>
+      <option value="2000">2s</option>
+      <option value="5000">5s</option>
+      <option value="10000">10s</option>
+      <option value="0">Pause</option>
+    </select>
+    <button id="clear" class="btn">Clear</button>
+  </section>
 
   <main id="events"></main>
 
@@ -110,7 +99,8 @@
     const statusEl = document.getElementById('status');
     const intervalSel = document.getElementById('interval');
     const clearBtn = document.getElementById('clear');
-    const filterName = document.getElementById('filterName');
+    // Hook global search from navbar
+    const filterName = document.getElementById('globalSearch');
 
     const seen = new Set();
     const allEvents = [];
@@ -204,9 +194,11 @@
       const q = currentFilter.trim().toLowerCase();
       const base = q ? allEvents.filter(e => (e.eventName || '').toLowerCase().includes(q)) : allEvents.slice();
       base.sort((a, b) => eventSortKey(b) - eventSortKey(a)); // newest first
+      const frag = document.createDocumentFragment();
       for (const ev of base) {
-        container.appendChild(buildEventCard(ev));
+        frag.appendChild(buildEventCard(ev));
       }
+      container.appendChild(frag);
       statusEl.textContent = `Showing ${base.length} event(s)`;
     }
 
@@ -254,7 +246,12 @@
 
     intervalSel.addEventListener('change', () => { startPolling(Number(intervalSel.value)); });
     clearBtn.addEventListener('click', () => { container.innerHTML = ''; seen.clear(); allEvents.length = 0; statusEl.textContent = 'Cleared'; });
-    filterName.addEventListener('input', () => { currentFilter = filterName.value; renderList(); });
+    // Wire global search both via input and custom event
+    function setFilter(val){ currentFilter = val; renderList(); }
+    window.applyGlobalSearch = setFilter;
+    window.readGlobalSearch = () => currentFilter;
+    if (filterName) filterName.addEventListener('input', () => setFilter(filterName.value));
+    window.addEventListener('global-search-change', (e) => setFilter(e.detail || ''));
 
     startPolling(Number(intervalSel.value));
   </script>

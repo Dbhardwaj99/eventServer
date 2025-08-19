@@ -1,0 +1,77 @@
+<header class="navbar">
+  <style>
+    .navbar { position: sticky; top: 0; background: color-mix(in oklab, var(--bg) 90%, transparent); padding: 12px 16px; border-bottom: 1px solid var(--border); backdrop-filter: blur(12px); z-index: 100; }
+    .nav-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .nav-left { display: flex; gap: 10px; align-items: center; }
+    .nav-title { font-weight: 700; color: var(--title); font-size: 14px; }
+    .nav-links { display: flex; gap: 8px; align-items: center; }
+    .btn { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 13px; line-height: 1.2; box-shadow: 0 1px 0 rgba(0,0,0,0.05); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .btn.active { outline: 2px solid var(--accent); }
+    .search { display: none; align-items: center; gap: 8px; }
+    #globalSearch { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 13px; line-height: 1.2; min-width: 260px; }
+  </style>
+  <div class="nav-row">
+    <div class="nav-left">
+      <div class="nav-title">Event Server</div>
+      <div class="search" id="searchWrap">
+        <input id="globalSearch" type="text" placeholder="Search eventName..." />
+      </div>
+    </div>
+    <div class="nav-links">
+      <a class="btn" href="/">Logs</a>
+      <a class="btn" href="/events-view">Live Events</a>
+      <a class="btn" href="/events-tracker">Tracker</a>
+      <button id="themeToggle" class="btn">Light Mode</button>
+    </div>
+  </div>
+  <script>
+    (function(){
+      // Theme handling shared
+      function applyTheme() {
+        const t = localStorage.getItem('theme') || 'dark';
+        document.body.classList.toggle('light', t === 'light');
+        const btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = t === 'light' ? 'Dark Mode' : 'Light Mode';
+      }
+      window.addEventListener('DOMContentLoaded', applyTheme);
+      document.addEventListener('click', function(e){
+        const btn = e.target.closest('#themeToggle');
+        if (!btn) return;
+        const t = localStorage.getItem('theme') || 'dark';
+        localStorage.setItem('theme', t === 'light' ? 'dark' : 'light');
+        applyTheme();
+      });
+
+      // Active link state
+      function highlightActive(){
+        const path = location.pathname;
+        document.querySelectorAll('.nav-links .btn[href]').forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === path);
+        });
+      }
+      window.addEventListener('DOMContentLoaded', highlightActive);
+
+      // Global search visibility: only on /events-view
+      function setupSearch(){
+        const wrap = document.getElementById('searchWrap');
+        const input = document.getElementById('globalSearch');
+        const onEventsPage = location.pathname.startsWith('/events-view');
+        wrap.style.display = onEventsPage ? 'flex' : 'none';
+        // Initialize from page if handler provided
+        if (onEventsPage && typeof window.readGlobalSearch === 'function') {
+          try { input.value = window.readGlobalSearch() || ''; } catch {}
+        }
+        // Forward changes to page if handler provided
+        input.addEventListener('input', () => {
+          if (typeof window.applyGlobalSearch === 'function') {
+            window.applyGlobalSearch(input.value);
+          }
+          const ev = new CustomEvent('global-search-change', { detail: input.value });
+          window.dispatchEvent(ev);
+        });
+      }
+      window.addEventListener('DOMContentLoaded', setupSearch);
+    })();
+  </script>
+</header>
+

@@ -76,6 +76,12 @@ async def events_view(request: Request):
     return templates.TemplateResponse("events.html", {"request": request})
 
 
+@app.get("/events-tracker", response_class=HTMLResponse)
+async def events_tracker(request: Request):
+    # 3-pane tracker UI for selected event names
+    return templates.TemplateResponse("events_tracker.html", {"request": request})
+
+
 @app.get("/events-feed")
 async def events_feed():
     """
