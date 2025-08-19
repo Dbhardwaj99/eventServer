@@ -9,29 +9,50 @@
       --bg: #0b0f14;
       --card: #121826;
       --border: #1e293b;
-      --key: #7dd3fc;     /* cyan */
-      --string: #a7f3d0;  /* mint */
-      --number: #fca5a5;  /* salmon */
-      --bool: #fde68a;    /* yellow */
-      --null: #c4b5fd;    /* purple */
-      --title: #e2e8f0;   /* light text */
-      --text: #cbd5e1;    /* base text */
+      --key: #7dd3fc;
+      --string: #a7f3d0;
+      --number: #fca5a5;
+      --bool: #fde68a;
+      --null: #c4b5fd;
+      --title: #e2e8f0;
+      --text: #cbd5e1;
       --muted: #94a3b8;
       --badge: #334155;
+      --accent: #3b82f6;
     }
-    body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    header { position: sticky; top: 0; background: linear-gradient(to bottom, rgba(11,15,20,0.95), rgba(11,15,20,0.75), rgba(11,15,20,0)); padding: 16px 20px; border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); z-index: 10; }
+    body.light {
+      --bg: #f5f6f8;
+      --card: #ffffff;
+      --border: #dce1e7;
+      --key: #0369a1;
+      --string: #047857;
+      --number: #b91c1c;
+      --bool: #a16207;
+      --null: #6d28d9;
+      --title: #0f172a;
+      --text: #0f172a;
+      --muted: #475569;
+      --badge: #e5e7eb;
+      --accent: #2563eb;
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    header { position: sticky; top: 0; background: color-mix(in oklab, var(--bg) 90%, transparent); padding: 12px 16px; border-bottom: 1px solid var(--border); backdrop-filter: blur(12px); z-index: 10; }
     header .row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
     .status { font-size: 12px; color: var(--muted); }
-    .controls { display: flex; gap: 8px; align-items: center; }
-    button, select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .left { display: flex; gap: 10px; align-items: center; }
+    .nav { display: flex; gap: 8px; }
+    .btn, select, input[type="text"] { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 13px; line-height: 1.2; box-shadow: 0 1px 0 rgba(0,0,0,0.05); }
+    .btn { cursor: pointer; }
+    .btn.primary { background: linear-gradient(to bottom, color-mix(in oklab, var(--accent) 85%, white), var(--accent)); color: white; border: 1px solid color-mix(in oklab, var(--accent) 60%, black); }
+    .btn.ghost { background: transparent; }
     main { padding: 16px; display: grid; gap: 12px; }
     .event-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
     .event-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
     .event-title { font-weight: 700; color: var(--title); font-size: 14px; }
     .badges { display: flex; gap: 6px; flex-wrap: wrap; }
     .badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--badge); color: var(--text); border: 1px solid var(--border); }
-    pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; background: rgba(255,255,255,0.02); border-radius: 8px; padding: 10px; border: 1px solid var(--border); overflow: auto; font-size: 12px; line-height: 1.5; }
+    pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; background: color-mix(in oklab, var(--card) 90%, black); border-radius: 8px; padding: 10px; border: 1px solid var(--border); overflow: auto; font-size: 12px; line-height: 1.5; }
     .j-key { color: var(--key); }
     .j-string { color: var(--string); }
     .j-number { color: var(--number); }
@@ -42,19 +63,26 @@
 <body>
   <header>
     <div class="row">
-      <div>
+      <div class="left">
         <div class="event-title">Live Events</div>
         <div id="status" class="status">Idle</div>
       </div>
       <div class="controls">
+        <div class="nav">
+          <a class="btn" href="/">View Logs</a>
+          <button id="themeToggle" class="btn">Toggle Theme</button>
+        </div>
         <label for="interval">Refresh</label>
         <select id="interval">
+          <option value="1000" selected>1s</option>
           <option value="2000">2s</option>
-          <option value="5000" selected>5s</option>
+          <option value="5000">5s</option>
           <option value="10000">10s</option>
           <option value="0">Pause</option>
         </select>
-        <button id="clear">Clear</button>
+        <label for="filterName">Filter</label>
+        <input id="filterName" type="text" placeholder="eventName contains..." />
+        <button id="clear" class="btn">Clear</button>
       </div>
     </div>
   </header>
@@ -62,14 +90,32 @@
   <main id="events"></main>
 
   <script>
+    // Theme setup
+    const themeToggle = document.getElementById('themeToggle');
+    function applyTheme() {
+      const t = localStorage.getItem('theme') || 'dark';
+      document.body.classList.toggle('light', t === 'light');
+      themeToggle.textContent = t === 'light' ? 'Dark Mode' : 'Light Mode';
+    }
+    themeToggle.addEventListener('click', () => {
+      const t = localStorage.getItem('theme') || 'dark';
+      localStorage.setItem('theme', t === 'light' ? 'dark' : 'light');
+      applyTheme();
+    });
+    applyTheme();
+
     const FETCH_URL = '/events-feed';
 
     const container = document.getElementById('events');
     const statusEl = document.getElementById('status');
     const intervalSel = document.getElementById('interval');
     const clearBtn = document.getElementById('clear');
+    const filterName = document.getElementById('filterName');
 
     const seen = new Set();
+    const allEvents = [];
+    let currentFilter = '';
+    let seq = 0; // sequence to preserve arrival order when timestamps are missing
 
     function eventId(ev) {
       const label = typeof ev.eventLabel === 'string' ? ev.eventLabel : JSON.stringify(ev.eventLabel ?? '');
@@ -147,16 +193,35 @@
       return card;
     }
 
+    function eventSortKey(ev) {
+      const ts = Number(ev.eventTimestamp);
+      if (!Number.isNaN(ts) && ts > 0) return ts;
+      return ev._seq ?? -Infinity;
+    }
+
+    function renderList() {
+      container.innerHTML = '';
+      const q = currentFilter.trim().toLowerCase();
+      const base = q ? allEvents.filter(e => (e.eventName || '').toLowerCase().includes(q)) : allEvents.slice();
+      base.sort((a, b) => eventSortKey(b) - eventSortKey(a)); // newest first
+      for (const ev of base) {
+        container.appendChild(buildEventCard(ev));
+      }
+      statusEl.textContent = `Showing ${base.length} event(s)`;
+    }
+
     function appendNewEvents(events) {
       let appended = 0;
       for (const ev of events) {
         const id = eventId(ev);
         if (seen.has(id)) continue;
         seen.add(id);
-        container.appendChild(buildEventCard(ev));
+        if (ev._seq == null) ev._seq = seq++;
+        allEvents.push(ev);
         appended++;
       }
       if (appended > 0) {
+        renderList();
         statusEl.textContent = `Added ${appended} new event(s) • ${new Date().toLocaleTimeString()}`;
       } else {
         statusEl.textContent = `No new events • ${new Date().toLocaleTimeString()}`;
@@ -188,7 +253,8 @@
     function stopPolling() { if (timer) clearInterval(timer); timer = null; }
 
     intervalSel.addEventListener('change', () => { startPolling(Number(intervalSel.value)); });
-    clearBtn.addEventListener('click', () => { container.innerHTML = ''; seen.clear(); statusEl.textContent = 'Cleared'; });
+    clearBtn.addEventListener('click', () => { container.innerHTML = ''; seen.clear(); allEvents.length = 0; statusEl.textContent = 'Cleared'; });
+    filterName.addEventListener('input', () => { currentFilter = filterName.value; renderList(); });
 
     startPolling(Number(intervalSel.value));
   </script>
