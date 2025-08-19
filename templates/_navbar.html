@@ -21,6 +21,7 @@
       <a class="btn" href="/">Logs</a>
       <a class="btn" href="/events-view">Live Events</a>
       <a class="btn" href="/events-tracker">Tracker</a>
+      <button id="globalClear" class="btn" title="Clear all logs">Clear</button>
       <button id="themeToggle" class="btn">Light Mode</button>
     </div>
   </div>
@@ -71,6 +72,24 @@
         });
       }
       window.addEventListener('DOMContentLoaded', setupSearch);
+
+      // Global clear
+      function setupGlobalClear(){
+        const btn = document.getElementById('globalClear');
+        if (!btn) return;
+        btn.addEventListener('click', async function(){
+          if (!confirm('Clear ALL logs? This cannot be undone.')) return;
+          try {
+            const res = await fetch('/clear', { method: 'POST', redirect: 'manual' });
+            if (!res.ok && res.status !== 303) throw new Error('Failed to clear');
+            // Notify current page to reset its local state without full reload
+            window.dispatchEvent(new CustomEvent('global-logs-cleared'));
+          } catch (e) {
+            alert('Failed to clear logs: ' + String(e));
+          }
+        });
+      }
+      window.addEventListener('DOMContentLoaded', setupGlobalClear);
     })();
   </script>
 </header>
