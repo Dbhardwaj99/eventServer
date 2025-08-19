@@ -50,18 +50,11 @@
       .j-bool { color: var(--bool); }
       .j-null { color: var(--null); }
       .empty { text-align: center; color: var(--muted); padding: 48px 0; }
-      @keyframes flashNew { from { box-shadow: 0 0 0 9999px rgba(34,197,94,0.12) inset; } to { box-shadow: 0 0 0 9999px rgba(34,197,94,0) inset; } }
-      .flash-new { animation: flashNew 1200ms ease-out 1; }
+      @keyframes flashNew { from { box-shadow: 0 0 0 9999px rgba(34,197,94,0.16) inset; } to { box-shadow: 0 0 0 9999px rgba(34,197,94,0) inset; } }
+      .flash-new { animation: flashNew 1100ms ease-out 1; }
     </style>
     <script>
-      function applyTheme() {
-        const t = localStorage.getItem('theme') || 'dark';
-        document.body.classList.toggle('light', t === 'light');
-        const btn = document.getElementById('themeToggle');
-        if (btn) btn.textContent = t === 'light' ? 'Dark Mode' : 'Light Mode';
-      }
       window.addEventListener('DOMContentLoaded', () => {
-        applyTheme();
         // Syntax highlight JSON in code blocks
         function syntaxHighlight(txt) {
           const esc = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;');

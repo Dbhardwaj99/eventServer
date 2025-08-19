@@ -103,6 +103,18 @@ async def events_feed():
     return {"events": flattened}
 
 
+@app.get("/logs-feed")
+async def logs_feed():
+    """
+    Return the raw request log items (most lightweight view) so the Logs tab
+    can poll incrementally and deduplicate on the client.
+    """
+    with LOG_LOCK:
+        # Send newest first to make client-side prepend simple if needed
+        items: List[Dict[str, Any]] = list(reversed(REQUEST_LOG))
+    return {"items": items}
+
+
 @app.post("/clear")
 async def clear_logs():
     with LOG_LOCK:

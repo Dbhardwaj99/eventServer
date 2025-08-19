@@ -30,6 +30,8 @@
     .input { width: 100%; }
     .stream { padding: 10px; display: grid; gap: 10px; overflow: auto; }
     .event-card { background: color-mix(in oklab, var(--card) 90%, black); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+    @keyframes flashNew { from { box-shadow: 0 0 0 9999px rgba(34,197,94,0.14) inset; } to { box-shadow: 0 0 0 9999px rgba(34,197,94,0) inset; } }
+    .flash-new { animation: flashNew 1100ms ease-out 1; }
     .event-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--badge); color: var(--text); border: 1px solid var(--border); }
     pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; overflow: auto; font-size: 12px; line-height: 1.5; }
@@ -76,19 +78,7 @@
   </section>
 
   <script>
-    // Theme
-    const themeToggle = document.getElementById('themeToggle');
-    function applyTheme() {
-      const t = localStorage.getItem('theme') || 'dark';
-      document.body.classList.toggle('light', t === 'light');
-      themeToggle.textContent = t === 'light' ? 'Dark Mode' : 'Light Mode';
-    }
-    themeToggle.addEventListener('click', () => {
-      const t = localStorage.getItem('theme') || 'dark';
-      localStorage.setItem('theme', t === 'light' ? 'dark' : 'light');
-      applyTheme();
-    });
-    applyTheme();
+    // Theme handled globally by navbar include
 
     const FETCH_URL = '/events-feed';
     const statusEl = document.getElementById('status');
@@ -123,7 +113,7 @@
         });
     }
 
-    function buildEventCard(ev) {
+    function buildEventCard(ev, isNew = false) {
       const parsedLabel = tryParseJSONMaybeString(ev.eventLabel);
       const displayObj = {
         eventName: ev.eventName ?? null,
@@ -135,7 +125,7 @@
         _source_endpoint: ev._source_endpoint ?? null,
       };
       const wrap = document.createElement('div');
-      wrap.className = 'event-card';
+      wrap.className = 'event-card' + (isNew ? ' flash-new' : '');
       const head = document.createElement('div');
       head.className = 'event-head';
       const title = document.createElement('div');
@@ -152,20 +142,33 @@
       return wrap;
     }
 
+    // Core incremental processing and per-pane dedup
+    const globalSeen = new Set();
+    const paneSeen = panes.map(() => new Set());
+    let seq = 0;
+    function eventId(ev) {
+      const label = typeof ev.eventLabel === 'string' ? ev.eventLabel : JSON.stringify(ev.eventLabel ?? '');
+      return [ev.eventName||'', ev.screenName||'', ev.eventAction||'', ev.eventTimestamp||'', label].join('::');
+    }
     function handleEvents(events) {
       // newest first by timestamp if possible
       events.sort((a, b) => (Number(b.eventTimestamp) || 0) - (Number(a.eventTimestamp) || 0));
       for (const ev of events) {
-        for (const pane of panes) {
-          if (!pane.name) continue;
-          if ((ev.eventName || '').toLowerCase() === pane.name.toLowerCase()) {
-            pane.count++;
-            pane.countEl.textContent = pane.count;
-            pane.stream.prepend(buildEventCard(ev));
-            // Limit to last 50 per pane
-            while (pane.stream.children.length > 50) pane.stream.removeChild(pane.stream.lastChild);
-          }
-        }
+        const id = eventId(ev);
+        if (!('_seq' in ev)) ev._seq = seq++;
+        // Track globally so tabs can share if needed later
+        if (!globalSeen.has(id)) globalSeen.add(id);
+        panes.forEach((pane, idx) => {
+          if (!pane.name) return;
+          if ((ev.eventName || '').toLowerCase() !== pane.name.toLowerCase()) return;
+          const seenSet = paneSeen[idx];
+          if (seenSet.has(id)) return; // dedupe within pane across refreshes
+          seenSet.add(id);
+          pane.count++;
+          pane.countEl.textContent = String(pane.count);
+          pane.stream.prepend(buildEventCard(ev, true));
+          while (pane.stream.children.length > 50) pane.stream.removeChild(pane.stream.lastChild);
+        });
       }
     }
 
@@ -184,12 +187,13 @@
       }
     }
 
-    panes.forEach(p => {
+    panes.forEach((p, idx) => {
       p.input.addEventListener('input', () => {
         p.name = p.input.value.trim();
         p.count = 0;
         p.countEl.textContent = '0';
         p.stream.innerHTML = '';
+        paneSeen[idx].clear();
       });
     });
 

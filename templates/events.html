@@ -58,6 +58,8 @@
     .j-number { color: var(--number); }
     .j-bool { color: var(--bool); }
     .j-null { color: var(--null); }
+    @keyframes flashNew { from { box-shadow: 0 0 0 9999px rgba(34,197,94,0.14) inset; } to { box-shadow: 0 0 0 9999px rgba(34,197,94,0) inset; } }
+    .flash-new { animation: flashNew 1100ms ease-out 1; }
   </style>
 </head>
 <body>
@@ -79,20 +81,6 @@
   <main id="events"></main>
 
   <script>
-    // Theme setup
-    const themeToggle = document.getElementById('themeToggle');
-    function applyTheme() {
-      const t = localStorage.getItem('theme') || 'dark';
-      document.body.classList.toggle('light', t === 'light');
-      themeToggle.textContent = t === 'light' ? 'Dark Mode' : 'Light Mode';
-    }
-    themeToggle.addEventListener('click', () => {
-      const t = localStorage.getItem('theme') || 'dark';
-      localStorage.setItem('theme', t === 'light' ? 'dark' : 'light');
-      applyTheme();
-    });
-    applyTheme();
-
     const FETCH_URL = '/events-feed';
 
     const container = document.getElementById('events');
@@ -140,7 +128,7 @@
         });
     }
 
-    function buildEventCard(ev) {
+    function buildEventCard(ev, isNew = false) {
       const parsedLabel = tryParseJSONMaybeString(ev.eventLabel);
       const displayObj = {
         eventName: ev.eventName ?? null,
@@ -153,7 +141,7 @@
       };
 
       const card = document.createElement('section');
-      card.className = 'event-card';
+      card.className = 'event-card' + (isNew ? ' flash-new' : '');
 
       const header = document.createElement('div');
       header.className = 'event-header';
@@ -216,9 +204,7 @@
       }
       if (newOnes.length > 0) {
         newOnes.sort((a,b)=> eventSortKey(b)-eventSortKey(a));
-        for (const ev of newOnes) {
-          container.prepend(buildEventCard(ev, true));
-        }
+        for (const ev of newOnes) { container.prepend(buildEventCard(ev, true)); }
         statusEl.textContent = `Added ${newOnes.length} new event(s) • ${new Date().toLocaleTimeString()}`;
       } else {
         statusEl.textContent = `No new events • ${new Date().toLocaleTimeString()}`;
