@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live Events</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #121826;
+      --border: #1e293b;
+      --key: #7dd3fc;     /* cyan */
+      --string: #a7f3d0;  /* mint */
+      --number: #fca5a5;  /* salmon */
+      --bool: #fde68a;    /* yellow */
+      --null: #c4b5fd;    /* purple */
+      --title: #e2e8f0;   /* light text */
+      --text: #cbd5e1;    /* base text */
+      --muted: #94a3b8;
+      --badge: #334155;
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    header { position: sticky; top: 0; background: linear-gradient(to bottom, rgba(11,15,20,0.95), rgba(11,15,20,0.75), rgba(11,15,20,0)); padding: 16px 20px; border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); z-index: 10; }
+    header .row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .status { font-size: 12px; color: var(--muted); }
+    .controls { display: flex; gap: 8px; align-items: center; }
+    button, select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+    main { padding: 16px; display: grid; gap: 12px; }
+    .event-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+    .event-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .event-title { font-weight: 700; color: var(--title); font-size: 14px; }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; background: var(--badge); color: var(--text); border: 1px solid var(--border); }
+    pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; background: rgba(255,255,255,0.02); border-radius: 8px; padding: 10px; border: 1px solid var(--border); overflow: auto; font-size: 12px; line-height: 1.5; }
+    .j-key { color: var(--key); }
+    .j-string { color: var(--string); }
+    .j-number { color: var(--number); }
+    .j-bool { color: var(--bool); }
+    .j-null { color: var(--null); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <div>
+        <div class="event-title">Live Events</div>
+        <div id="status" class="status">Idle</div>
+      </div>
+      <div class="controls">
+        <label for="interval">Refresh</label>
+        <select id="interval">
+          <option value="2000">2s</option>
+          <option value="5000" selected>5s</option>
+          <option value="10000">10s</option>
+          <option value="0">Pause</option>
+        </select>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="events"></main>
+
+  <script>
+    const FETCH_URL = '/events-feed';
+
+    const container = document.getElementById('events');
+    const statusEl = document.getElementById('status');
+    const intervalSel = document.getElementById('interval');
+    const clearBtn = document.getElementById('clear');
+
+    const seen = new Set();
+
+    function eventId(ev) {
+      const label = typeof ev.eventLabel === 'string' ? ev.eventLabel : JSON.stringify(ev.eventLabel ?? '');
+      return [
+        ev.eventName ?? '',
+        ev.screenName ?? '',
+        ev.eventAction ?? '',
+        ev.eventTimestamp ?? '',
+        label
+      ].join('::');
+    }
+
+    function tryParseJSONMaybeString(str) {
+      if (typeof str !== 'string') return str;
+      try { return JSON.parse(str); } catch (_) { return str; }
+    }
+
+    function syntaxHighlight(obj) {
+      const json = JSON.stringify(obj, null, 2);
+      return json
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g, match => {
+          let cls = 'j-number';
+          if (/^"/.test(match)) {
+            cls = /:$/.test(match) ? 'j-key' : 'j-string';
+          } else if (/true|false/.test(match)) {
+            cls = 'j-bool';
+          } else if (/null/.test(match)) {
+            cls = 'j-null';
+          }
+          return '<span class="' + cls + '">' + match + '</span>';
+        });
+    }
+
+    function buildEventCard(ev) {
+      const parsedLabel = tryParseJSONMaybeString(ev.eventLabel);
+      const displayObj = {
+        eventName: ev.eventName ?? null,
+        screenName: ev.screenName ?? null,
+        eventAction: ev.eventAction ?? null,
+        eventTimestamp: ev.eventTimestamp ?? null,
+        eventLabel: parsedLabel,
+        _received_at: ev._received_at ?? null,
+        _source_endpoint: ev._source_endpoint ?? null,
+      };
+
+      const card = document.createElement('section');
+      card.className = 'event-card';
+
+      const header = document.createElement('div');
+      header.className = 'event-header';
+
+      const title = document.createElement('div');
+      title.className = 'event-title';
+      title.textContent = ev.eventName || '(no eventName)';
+
+      const badges = document.createElement('div');
+      badges.className = 'badges';
+      for (const [k, v] of Object.entries({ screen: ev.screenName, action: ev.eventAction, ts: ev.eventTimestamp })) {
+        if (!v) continue;
+        const b = document.createElement('span');
+        b.className = 'badge';
+        b.textContent = `${k}: ${v}`;
+        badges.appendChild(b);
+      }
+
+      header.appendChild(title);
+      header.appendChild(badges);
+
+      const pre = document.createElement('pre');
+      pre.innerHTML = syntaxHighlight(displayObj);
+
+      card.appendChild(header);
+      card.appendChild(pre);
+      return card;
+    }
+
+    function appendNewEvents(events) {
+      let appended = 0;
+      for (const ev of events) {
+        const id = eventId(ev);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        container.appendChild(buildEventCard(ev));
+        appended++;
+      }
+      if (appended > 0) {
+        statusEl.textContent = `Added ${appended} new event(s) • ${new Date().toLocaleTimeString()}`;
+      } else {
+        statusEl.textContent = `No new events • ${new Date().toLocaleTimeString()}`;
+      }
+    }
+
+    async function fetchAndUpdate() {
+      try {
+        statusEl.textContent = 'Fetching...';
+        const res = await fetch(FETCH_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const events = Array.isArray(data) ? data : Array.isArray(data.events) ? data.events : [];
+        appendNewEvents(events);
+      } catch (err) {
+        statusEl.textContent = `Error: ${String(err)}`;
+        console.error(err);
+      }
+    }
+
+    let timer = null;
+    function startPolling(intervalMs) {
+      stopPolling();
+      if (intervalMs === 0) { statusEl.textContent = 'Paused'; return; }
+      fetchAndUpdate();
+      timer = setInterval(fetchAndUpdate, intervalMs);
+      statusEl.textContent = `Polling every ${intervalMs/1000}s`;
+    }
+    function stopPolling() { if (timer) clearInterval(timer); timer = null; }
+
+    intervalSel.addEventListener('change', () => { startPolling(Number(intervalSel.value)); });
+    clearBtn.addEventListener('click', () => { container.innerHTML = ''; seen.clear(); statusEl.textContent = 'Cleared'; });
+
+    startPolling(Number(intervalSel.value));
+  </script>
+</body>
+</html>
+

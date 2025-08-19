@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import uvicorn
+from copy import deepcopy
 
 from app.state import REQUEST_LOG, LOG_LOCK
 from app.utils import now_ist_str, pretty_json
@@ -69,6 +70,33 @@ async def index(request: Request):
     )
 
 
+@app.get("/events-view", response_class=HTMLResponse)
+async def events_view(request: Request):
+    # Serve the realtime events viewer (client polls /events-feed)
+    return templates.TemplateResponse("events.html", {"request": request})
+
+
+@app.get("/events-feed")
+async def events_feed():
+    """
+    Flatten and return all events found inside the JSON bodies we've received,
+    assuming a structure like { "events": [ ... ] } as provided by the client.
+    """
+    flattened: List[Dict[str, Any]] = []
+    with LOG_LOCK:
+        for entry in REQUEST_LOG:
+            payload = entry.get("json")
+            if isinstance(payload, dict) and isinstance(payload.get("events"), list):
+                for ev in payload["events"]:
+                    # Clone to avoid mutating the original
+                    ev_copy = deepcopy(ev)
+                    # Attach server-side timestamp and source endpoint for convenience
+                    ev_copy["_received_at"] = entry.get("timestamp")
+                    ev_copy["_source_endpoint"] = entry.get("endpoint")
+                    flattened.append(ev_copy)
+    return {"events": flattened}
+
+
 @app.post("/clear")
 async def clear_logs():
     with LOG_LOCK:
@@ -106,5 +134,5 @@ async def catch_all(request: Request, full_path: str):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 18001))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
